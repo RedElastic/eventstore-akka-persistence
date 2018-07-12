@@ -21,6 +21,7 @@ val akkaDeps =
 libraryDependencies ++= akkaDeps
 
 libraryDependencies += "com.geteventstore" %% "akka-persistence-eventstore" % "5.0.2"
+libraryDependencies += "com.softwaremill.macwire" %% "macros" % "2.3.1" % "provided"
 
 libraryDependencies += "org.json4s" %% "json4s-native" % "3.5.4"
 

@@ -10,20 +10,18 @@ import akka.persistence.typed.scaladsl._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.util.Timeout
-import com.google.inject.ImplementedBy
 import domain.user.User.UserId
 import es.EventStore
-import javax.inject.Inject
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-@ImplementedBy(classOf[UserRepositoryImpl])
+
 trait UserRepository {
   def ban(userId: UserId): Future[Unit]
 }
 
-class UserRepositoryImpl @Inject()(readStream: EventStore)(implicit actorSystem: ActorSystem[Nothing]) extends UserRepository {
+class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSystem[Nothing]) extends UserRepository {
 
   implicit val timeout = Timeout(2.seconds)
   implicit val ec = actorSystem.executionContext

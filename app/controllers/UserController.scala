@@ -1,15 +1,13 @@
 package controllers
 
 import domain.user.User.UserId
-import domain.user.UserRepository
-import javax.inject.{Inject, Singleton}
 import play.api.mvc.{AbstractController, AnyContent, ControllerComponents, Request}
+import services.user.UserService
 
-@Singleton
-class UserController @Inject()(cc: ControllerComponents,
-                               userRepository: UserRepository) extends AbstractController(cc) {
+class UserController(cc: ControllerComponents,
+                               userService: UserService) extends AbstractController(cc) {
   def ban(userId: String) = Action { request: Request[AnyContent] =>
-    userRepository.ban(UserId(userId))
+    userService.ban(UserId(userId))
 //    import org.json4s.native.Serialization.{read, write}
 //    implicit val formats = DefaultFormats + UserEventSerializer
 //    import domain.user.Event.Banned

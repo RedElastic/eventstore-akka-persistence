@@ -7,11 +7,10 @@ import akka.stream.scaladsl.Source
 import akka.{NotUsed, actor => untyped}
 import domain.user.User.Command.ChatConnect
 import domain.user.User.UserId
-import eventstore.{EventStream, _}
 import eventstore.tcp.ConnectionActor
-import javax.inject.Inject
+import eventstore.{EventStream, _}
 
-class EventStore @Inject()(connection: EsConnection)(implicit system: untyped.ActorSystem) {
+class EventStore(connection: EsConnection)(implicit system: untyped.ActorSystem) {
 
 //  import system.dispatcher
 //  implicit val materializer = akka.stream.ActorMaterializer()
