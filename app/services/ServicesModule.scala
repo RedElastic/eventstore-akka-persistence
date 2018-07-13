@@ -1,5 +1,5 @@
 package services
 
-import services.user.UserServiceModule
+import services.user.UserRepositoryModule
 
-trait ServicesModule extends UserServiceModule
+trait ServicesModule extends UserRepositoryModule

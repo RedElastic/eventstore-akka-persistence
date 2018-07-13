@@ -1,0 +1,12 @@
+fromStream('chat')
+.when({
+    $init: function(){
+        return {
+        }
+    },
+    "match": function(s,e){
+        const p = e.data;
+        emit(`chats-user-${p.user1}`, "PartnerFound", { partnerId: p.user2 });
+        emit(`chats-user-${p.user2}`, "PartnerFound", { partnerId: p.user1 });
+    }
+})

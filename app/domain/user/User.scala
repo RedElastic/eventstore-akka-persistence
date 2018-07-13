@@ -5,6 +5,7 @@ import java.util.UUID
 
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
+import akka.actor.typed.scaladsl.ActorContext
 import akka.persistence.typed.scaladsl.PersistentBehaviors._
 import akka.persistence.typed.scaladsl._
 import akka.stream.ActorMaterializer
@@ -19,6 +20,7 @@ import scala.concurrent.duration._
 
 trait UserRepository {
   def ban(userId: UserId): Future[Unit]
+  def ping(userId: UserId): Future[Unit]
 }
 
 class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSystem[Nothing]) extends UserRepository {
@@ -26,15 +28,45 @@ class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSyst
   implicit val timeout = Timeout(2.seconds)
   implicit val ec = actorSystem.executionContext
 
-  def ban(userId: UserId) = {
-    routingActor.map(_ ! (userId, User.Command.Ban))
+  //actorSystem.log.info("User repository up")
+  println("User repository up")
+
+  def ping(userId: UserId) = {
+    routingActor.map(_ ! GetRef(userId))
   }
 
-  private def routing(users: Map[UserId, ActorRef[User.Command]]): Behavior[(UserId, User.Command)] = Behaviors.receive {
-    case (ctx, (userId, msg)) =>
-      val ref = users.getOrElse(userId, ctx.spawnAnonymous(User.behavior(userId, readStream)))
-      ref ! msg
-      Behavior.same
+  def ban(userId: UserId) = {
+    routingActor.map(_ ! UserCommand(userId, User.Command.Ban))
+  }
+
+  sealed trait RouterMessage
+  case class UserCommand(userId: UserId, cmd: User.Command) extends RouterMessage
+  case class UserRemoved(userId: UserId) extends RouterMessage
+  case class GetRef(userId: UserId) extends RouterMessage
+
+  private def getRef(userId: UserId,
+                     users: Map[UserId, ActorRef[User.Command]])(
+      implicit ctx: ActorContext[RouterMessage]): (ActorRef[User.Command], Map[UserId, ActorRef[User.Command]]) = {
+    users.get(userId) match {
+      case Some(ref) =>
+        (ref, users)
+      case None =>
+        val ref = ctx.spawnAnonymous(User.behavior(userId, readStream))
+        ctx.watchWith(ref, UserRemoved(userId))
+        (ref, users + (userId -> ref))
+    }
+  }
+
+  private def routing(users: Map[UserId, ActorRef[User.Command]]): Behavior[RouterMessage] = Behaviors.receive {
+    case (ctx, UserCommand(userId, msg)) =>
+      val (userRef, userpool) = getRef(userId, users)(ctx)
+      userRef ! msg
+      routing(userpool)
+    case (ctx, UserRemoved(userId)) =>
+      routing(users - userId)
+    case (ctx, GetRef(userId)) =>
+      val (userRef, userpool) = getRef(userId, users)(ctx)
+      routing(userpool)
   }
 
   private val routingActor = actorSystem.systemActorOf(routing(Map.empty), name = "user-router")
@@ -87,7 +119,10 @@ object User {
     implicit val system = ctx.system.toUntyped
     implicit val mat = ActorMaterializer()
     readStream.chatsStream(userId).runWith(
-      Sink.foreach(msg => ctx.log.info(msg.toString)))
+      Sink.foreach { msg =>
+        play.api.Logger.info(msg.toString)
+        ctx.self ! msg
+      })
     persistentBehavior(userId)
   }
 
@@ -95,31 +130,30 @@ object User {
     PersistentBehaviors.receive[Command, Event, UserState](
       persistenceId = userId.persistenceId,
       emptyState = Idle,
-      commandHandler = commandHandler,
+      commandHandler = commandHandler(userId),
       eventHandler = eventHandler)
+    .snapshotEvery(numberOfEvents = 20)
 
-  val commandHandler: CommandHandler[Command, Event, UserState] = CommandHandler.byState {
+  def commandHandler(userId: UserId): CommandHandler[Command, Event, UserState] = (ctx,state,command) => state match {
     case Idle =>
-      CommandHandler.command {
+      command match {
         case Ban =>
+          play.api.Logger.info(s"User ${userId.asString} banned.")
+          ctx.log.info(s"User ${userId.asString} banned.")
           Effect.persist(Banned())
         case ChatConnect(partnerId) =>
+          play.api.Logger.info(s"User ${userId.asString} matched with ${partnerId.asString}")
           Effect.persist(MatchedWithPartner(partnerId))
       }
     case Chatting(partnerId) =>
-      CommandHandler.command {
+      command match {
         case Ban =>
           Effect.persist(Banned())
         case ChatConnect(_) =>
           Effect.none
       }
     case BannedState =>
-      CommandHandler.command {
-        _ =>
-          Effect.none
-      }
-
-
+      Effect.none
   }
 
   val eventHandler: (UserState, Event) => UserState = {

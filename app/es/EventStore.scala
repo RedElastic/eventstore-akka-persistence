@@ -9,8 +9,15 @@ import domain.user.User.Command.ChatConnect
 import domain.user.User.UserId
 import eventstore.tcp.ConnectionActor
 import eventstore.{EventStream, _}
+import play.api.libs.json.Json
 
-class EventStore(connection: EsConnection)(implicit system: untyped.ActorSystem) {
+object EventStore {
+  case class Config(topics: TopicsConfig)
+  case class TopicsConfig(partnerFoundPrefix: String)
+}
+
+
+class EventStore(connection: EsConnection, config: EventStore.Config)(implicit system: untyped.ActorSystem) {
 
 //  import system.dispatcher
 //  implicit val materializer = akka.stream.ActorMaterializer()
@@ -51,17 +58,16 @@ class EventStore(connection: EsConnection)(implicit system: untyped.ActorSystem)
   def chatsStream(userId: UserId): Source[ChatConnect, NotUsed] = {
     implicit val mat = ActorMaterializer()
     connection.streamSource(
-      streamId = EventStream.Id(s"chats-${userId.persistenceId}"),
+      streamId = EventStream.Id(s"${config.topics.partnerFoundPrefix}-${userId.persistenceId}"),
       infinite = true,
       resolveLinkTos = true)
+      .map(e => {play.api.Logger.info(e.toString); e})
       .collect {
-        case e: eventstore.Event if e.data.eventType == "ChatConnect" =>
+        case e: eventstore.Event if e.data.eventType == "PartnerFound" =>
           e.data.data match {
             case eventstore.Content.Json(js) =>
-              implicit val format = org.json4s.DefaultFormats
-              import org.json4s.native.Serialization.read
-              val msg: ChatConnect = read[ChatConnect](js)
-              msg
+              import serde.ChatConnectSerDe._
+              Json.parse(js).as[ChatConnect]
           }
 
       }

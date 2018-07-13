@@ -25,6 +25,8 @@ libraryDependencies += "com.softwaremill.macwire" %% "macros" % "2.3.1" % "provi
 
 libraryDependencies += "org.json4s" %% "json4s-native" % "3.5.4"
 
+libraryDependencies += "com.github.pureconfig" %% "pureconfig" % "0.9.1"
+
 // Adds additional packages into Twirl
 //TwirlKeys.templateImports += "com.chatroulette.controllers._"
 
