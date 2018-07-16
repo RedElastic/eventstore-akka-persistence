@@ -2,8 +2,6 @@ package es.serde
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
-import java.time.LocalDateTime
-import java.util.UUID
 
 import akka.actor.{ActorRef, ExtendedActorSystem}
 import akka.persistence.eventstore.EventStoreSerializer
@@ -11,8 +9,6 @@ import akka.persistence.eventstore.snapshot.EventStoreSnapshotStore.SnapshotEven
 import akka.persistence.eventstore.snapshot.EventStoreSnapshotStore.SnapshotEvent.Snapshot
 import akka.persistence.{PersistentRepr, SnapshotMetadata}
 import akka.util.ByteString
-import domain.chat.ChatMatch
-import domain.user.User.UserId
 import eventstore.{Content, ContentType, Event, EventData}
 import org.json4s.Extraction.decompose
 import org.json4s._
@@ -21,11 +17,12 @@ import org.json4s.native.Serialization.{read, write}
 class Json4sSerializer(val system: ExtendedActorSystem) extends EventStoreSerializer {
   import Json4sSerializer._
 
-  implicit val formats = DefaultFormats +
-    SnapshotSerializer +
-    new PersistentReprSerializer(system) +
-    ActorRefSerializer +
-    UserEventSerializer
+  implicit val formats =
+    DefaultFormats +
+      SnapshotSerializer +
+      new PersistentReprSerializer(system) +
+      ActorRefSerializer ++
+      UserEvents.serializers
 
   def identifier = Identifier
 
@@ -43,7 +40,7 @@ class Json4sSerializer(val system: ExtendedActorSystem) extends EventStoreSerial
 
   def toEvent(x: AnyRef) = x match {
     case x: PersistentRepr => EventData(
-      eventType = classFor(x.payload.asInstanceOf[AnyRef]).getName,
+      eventType = classFor(x).getName,
       data = Content(ByteString(toBinary(x)), ContentType.Json)
     )
 
@@ -90,13 +87,11 @@ object Json4sSerializer {
     def deserialize(implicit format: Formats) = {
       case (TypeInfo(Clazz, _), JObject(List(
       JField("data", JString(x)),
-      JField("metadata", metadata)))) =>
-        Snapshot(x, metadata.extract[SnapshotMetadata])
+      JField("metadata", metadata)))) => Snapshot(x, metadata.extract[SnapshotMetadata])
     }
 
     def serialize(implicit format: Formats) = {
-      case Snapshot(data, metadata) =>
-        JObject("data" -> JString(data.toString), "metadata" -> decompose(metadata))
+      case Snapshot(data, metadata) => JObject("data" -> JString(data.toString), "metadata" -> decompose(metadata))
     }
   }
 
@@ -105,75 +100,45 @@ object Json4sSerializer {
 
     def deserialize(implicit format: Formats) = {
       case (TypeInfo(Clazz, _), json) =>
-        val x = json.extract[Mapping]
+        val mapping = json.extract[Mapping]
+        // Clunky, needs fixing. The EventStore docs didn't really seem to cover this.
+        val payload = mapping.manifest match {
+          case "domain.user.Event$MatchedWithPartner" =>
+            (json \ "payload").extract[domain.user.Event.MatchedWithPartner]
+          case "domain.user.Event$Banned" =>
+            (json \ "payload").extract[domain.user.Event.Banned]
+          case _ =>
+            mapping.payload
+        }
         PersistentRepr(
-          payload = x.payload,
-          sequenceNr = x.sequenceNr,
-          persistenceId = x.persistenceId,
-          manifest = x.manifest,
-          writerUuid = x.writerUuid
+          payload = payload,
+          sequenceNr = mapping.sequenceNr,
+          persistenceId = mapping.persistenceId,
+          manifest = mapping.manifest,
+          writerUuid = mapping.writerUuid
         )
     }
     def serialize(implicit format: Formats) = {
       case x: PersistentRepr =>
+        val manifest = x.payload.getClass.getName
         val mapping = Mapping(
           payload = x.payload.asInstanceOf[AnyRef],
           sequenceNr = x.sequenceNr,
           persistenceId = x.persistenceId,
-          manifest = x.manifest,
+          manifest = manifest,
           writerUuid = x.writerUuid
         )
         decompose(mapping)
     }
-
   }
 
-  import domain.user
-  object UserEventSerializer extends CustomSerializer[user.Event](implicit format => (
-    {
-      case jObj: JObject if (jObj \ "type").extract[String] == "Banned" =>
-        val ts = (jObj \ "ts").extract[LocalDateTime]
-        val eventId = (jObj \ "eventId").extract[UUID]
-        user.Event.Banned(ts, eventId)
-    },
-    {
-      case ban: user.Event.Banned =>
-        JObject(
-          "type" -> JString("Banned"),
-          "ts" -> JString(ban.ts.toString),
-          "eventId" -> JString(ban.eventId.toString)
-        )
-    }
-  ))
 
-  import domain.chat
-  object ChatConnectSerializer extends CustomSerializer[ChatMatch](implicit format => (
-    {
-      case jObj: JObject if (jObj \ "type").extract[String] == "ChatMatch" =>
-        val ts = (jObj \ "ts").extract[LocalDateTime]
-        val eventId = (jObj \ "eventId").extract[UUID]
-        val user1 = (jObj \ "user1").extract[String]
-        val user2 = (jObj \ "user2").extract[String]
-        chat.ChatMatch(ts, eventId, UserId(user1), UserId(user2))
-    },
-    {
-      case e@chat.ChatMatch(u1, u2) =>
-        JObject(
-          "type" -> JString("ChatMatch"),
-          "ts" -> JString(e.ts.toString),
-          "eventId" -> JString(e.eventId.toString),
-          "user1" -> JString(u1.asString),
-          "user2" -> JString(u2.asString)
-        )
-    }
-  ))
 
   case class Mapping(
-                      payload:       Any,
+                      payload:       AnyRef,
                       sequenceNr:    Long,
                       persistenceId: String,
                       manifest:      String,
                       writerUuid:    String
                     )
 }
-

@@ -5,8 +5,10 @@ fromStream('chat')
         }
     },
     "match": function(s,e){
-        const p = e.data;
-        emit(`chats-user-${p.user1}`, "PartnerFound", { partnerId: p.user2 });
-        emit(`chats-user-${p.user2}`, "PartnerFound", { partnerId: p.user1 });
+        const user1 = e.data.user1;
+	const user2 = e.data.user2;
+	const matchStream = user => `partner-match-${user}`;
+        emit(matchStream(user1), "PartnerFound", { partnerId: user2 });
+        emit(matchStream(user2), "PartnerFound", { partnerId: user1 });
     }
 })

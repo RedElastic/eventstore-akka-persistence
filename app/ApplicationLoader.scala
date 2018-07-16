@@ -7,6 +7,9 @@ import _root_.controllers.AssetsComponents
 
 class EsApplicationLoader extends ApplicationLoader {
   override def load(context: Context): Application = {
+    LoggerConfigurator(context.environment.classLoader).foreach {
+      _.configure(context.environment, context.initialConfiguration, Map.empty)
+    }
     new EsComponents(context).application
   }
 }
@@ -18,6 +21,7 @@ class EsComponents(context: Context)
     with HttpFiltersComponents {
 
   override lazy val router: routing.Router = {
+    val prefix = "/"
     wire[Routes]
   }
 

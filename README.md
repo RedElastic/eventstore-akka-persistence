@@ -41,7 +41,16 @@ sbt run
 ```
 
 ```sh
-curl -i "http://localhost:2113/projections/continuous?name=chat-matches&emit=true" -d @chatmatch-projection.json
+curl -i "http://localhost:2113/projections/continuous?name=chat-matches&emit=true" -d @chatmatch-projection.json -u admin:changeit
 curl http://localhost:9000/user/user-A
 curl -i -H "Content-Type:application/vnd.eventstore.events+json" "http://localhost:2113/streams/chat" -d @chatMatch.json
+```
+
+```sh
+curl -i -X DELETE http://localhost:2113/projction/chat-matches -u admin:changeit
+```
+
+Note that EventStore will ignore events with an existing EventID, the following shell magic will insert a generated UUID to work around this:
+```
+uuid=$(uuidgen); cat chatMatch.json | sed s/UUID/$uuid/ | curl -i -H "Content-Type:application/vnd.eventstore.events+json" "http://localhost:2113/streams/chat" -d @-
 ```

@@ -27,6 +27,11 @@ libraryDependencies += "org.json4s" %% "json4s-native" % "3.5.4"
 
 libraryDependencies += "com.github.pureconfig" %% "pureconfig" % "0.9.1"
 
+//libraryDependencies ++= Seq(
+//  "com.typesafe.akka" %% "akka-slf4j"      % akkaVersion,
+//  "ch.qos.logback"    %  "logback-classic" % "1.2.3"
+//)
+
 // Adds additional packages into Twirl
 //TwirlKeys.templateImports += "com.chatroulette.controllers._"
 

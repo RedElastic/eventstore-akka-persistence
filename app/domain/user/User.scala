@@ -28,9 +28,6 @@ class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSyst
   implicit val timeout = Timeout(2.seconds)
   implicit val ec = actorSystem.executionContext
 
-  //actorSystem.log.info("User repository up")
-  println("User repository up")
-
   def ping(userId: UserId) = {
     routingActor.map(_ ! GetRef(userId))
   }
@@ -133,28 +130,31 @@ object User {
       commandHandler = commandHandler(userId),
       eventHandler = eventHandler)
     .snapshotEvery(numberOfEvents = 20)
+    .onRecoveryCompleted{ (ctx, state) =>
+      ctx.log.info(s"Recovered: ${state.toString}")
+    }
 
-  def commandHandler(userId: UserId): CommandHandler[Command, Event, UserState] = (ctx,state,command) => state match {
-    case Idle =>
-      command match {
-        case Ban =>
-          play.api.Logger.info(s"User ${userId.asString} banned.")
-          ctx.log.info(s"User ${userId.asString} banned.")
-          Effect.persist(Banned())
-        case ChatConnect(partnerId) =>
-          play.api.Logger.info(s"User ${userId.asString} matched with ${partnerId.asString}")
-          Effect.persist(MatchedWithPartner(partnerId))
-      }
-    case Chatting(partnerId) =>
-      command match {
-        case Ban =>
-          Effect.persist(Banned())
-        case ChatConnect(_) =>
-          Effect.none
-      }
-    case BannedState =>
-      Effect.none
-  }
+  def commandHandler(userId: UserId): CommandHandler[Command, Event, UserState] = (ctx,state,command) =>
+    state match {
+      case Idle =>
+        command match {
+          case Ban =>
+            ctx.log.info(s"User ${userId.asString} banned.")
+            Effect.persist(Banned())
+          case ChatConnect(partnerId) =>
+            ctx.log.info(s"User ${userId.asString} matched with ${partnerId.asString}")
+            Effect.persist(MatchedWithPartner(partnerId))
+        }
+      case Chatting(partnerId) =>
+        command match {
+          case Ban =>
+            Effect.persist(Banned())
+          case ChatConnect(_) =>
+            Effect.unhandled
+        }
+      case BannedState =>
+        Effect.unhandled
+    }
 
   val eventHandler: (UserState, Event) => UserState = {
     case (state, Banned()) =>

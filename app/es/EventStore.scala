@@ -2,8 +2,9 @@ package es
 
 import akka.actor.Status.Failure
 import akka.actor.{Actor, ActorLogging, Props}
-import akka.stream.ActorMaterializer
+import akka.event.Logging
 import akka.stream.scaladsl.Source
+import akka.stream.{ActorMaterializer, Attributes}
 import akka.{NotUsed, actor => untyped}
 import domain.user.User.Command.ChatConnect
 import domain.user.User.UserId
@@ -18,6 +19,11 @@ object EventStore {
 
 
 class EventStore(connection: EsConnection, config: EventStore.Config)(implicit system: untyped.ActorSystem) {
+
+  private val log = play.api.Logger
+  private implicit val loggingAdapter = system.log
+
+
 
 //  import system.dispatcher
 //  implicit val materializer = akka.stream.ActorMaterializer()
@@ -57,11 +63,14 @@ class EventStore(connection: EsConnection, config: EventStore.Config)(implicit s
 
   def chatsStream(userId: UserId): Source[ChatConnect, NotUsed] = {
     implicit val mat = ActorMaterializer()
+    val streamId = s"${config.topics.partnerFoundPrefix}-${userId.persistenceId}"
+    log.info(s"Subscribing to $streamId")
     connection.streamSource(
-      streamId = EventStream.Id(s"${config.topics.partnerFoundPrefix}-${userId.persistenceId}"),
+      streamId = EventStream.Id(streamId),
+      fromEventNumberExclusive = Some(EventNumber.Last),    // More generally we may need the aggregate to maintain it's offset
       infinite = true,
       resolveLinkTos = true)
-      .map(e => {play.api.Logger.info(e.toString); e})
+      .log(streamId, _.toString).withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
       .collect {
         case e: eventstore.Event if e.data.eventType == "PartnerFound" =>
           e.data.data match {
