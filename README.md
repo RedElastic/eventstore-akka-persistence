@@ -54,3 +54,13 @@ Note that EventStore will ignore events with an existing EventID, the following 
 ```
 uuid=$(uuidgen); cat chatMatch.json | sed s/UUID/$uuid/ | curl -i -H "Content-Type:application/vnd.eventstore.events+json" "http://localhost:2113/streams/chat" -d @-
 ```
+
+# Caveats
+
+Deleting a stream: 
+- soft-delete: If stream is recreated the version will not start at zero, this is an issue for the Akka persistence plugin.
+- hard-delete: Can never create a new stream with same name. Can not restore the stream. Essentially that stream and its name are forever lost.
+
+# Evaluation
+
+The ability to create custom projections and queries on the fly is very powerful. This allows for both construction of view models as well as ad hoc querying of the system.
