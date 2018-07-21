@@ -155,11 +155,11 @@ object User {
     }
 
   val eventHandler: (UserState, UserEvent) => UserState = {
-    case (state, Banned()) =>
+    case (_, Banned()) =>
       BannedState
     case (Idle, MatchedWithPartner(partnerId)) =>
       Chatting(partnerId)
-    case (state,_) =>
+    case (state, _) =>
       state
   }
 
