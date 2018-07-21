@@ -41,9 +41,10 @@ class Json4sSerializer(val system: ExtendedActorSystem) extends EventStoreSerial
   def toEvent(x: AnyRef) = x match {
     case x: PersistentRepr =>
       val data = x.payload.asInstanceOf[AnyRef]
-      val metadata = x.withPayload("").withManifest(classFor(x.payload.asInstanceOf[AnyRef]).getName)
+      val dataClass = classFor(x.payload.asInstanceOf[AnyRef]).getName
+      val metadata = x.withPayload("").withManifest(dataClass)
       EventData(
-        eventType = classFor(x).getName,
+        eventType = dataClass,
         data = Content(ByteString(toBinary(data)), ContentType.Json),
         metadata = Content(ByteString(toBinary(metadata)), ContentType.Json)
       )
@@ -57,7 +58,6 @@ class Json4sSerializer(val system: ExtendedActorSystem) extends EventStoreSerial
   }
 
   def fromEvent(event: Event, manifest: Class[_]) = {
-    //val clazz = Class.forName(event.data.eventType)
     val metadata = fromBinary(event.data.metadata.value.toArray, manifest)
     metadata match {
       case x: PersistentRepr =>
@@ -112,17 +112,6 @@ object Json4sSerializer {
     def deserialize(implicit format: Formats) = {
       case (TypeInfo(Clazz, _), json) =>
         val mapping = json.extract[Mapping]
-        // Clunky, needs fixing. The EventStore docs didn't really seem to cover this.
-        /*
-        val payload = mapping.manifest match {
-          case "domain.user.Event$MatchedWithPartner" =>
-            (json \ "payload").extract[domain.user.Event.MatchedWithPartner]
-          case "domain.user.Event$Banned" =>
-            (json \ "payload").extract[domain.user.Event.Banned]
-          case _ =>
-            mapping.payload
-        }
-        */
         PersistentRepr(
           payload = null,
           sequenceNr = mapping.sequenceNr,
@@ -133,7 +122,6 @@ object Json4sSerializer {
     }
     def serialize(implicit format: Formats) = {
       case x: PersistentRepr =>
-        //val manifest = x.payload.getClass.getName
         val mapping = Mapping(
           payload = x.payload.asInstanceOf[AnyRef],
           sequenceNr = x.sequenceNr,
