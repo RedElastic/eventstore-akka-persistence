@@ -1,6 +1,6 @@
 package domain.user
 
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.UUID
 
 import akka.actor.typed._
@@ -70,18 +70,16 @@ class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSyst
 
 }
 
-
-// It be nice to put this in User but there are serialization issues that I don't care to work out at the moment.
-abstract class Event(val eventType: String) extends domain.Event
-object Event {
-  case class Banned() extends Event("Banned")
+sealed trait UserEvent
+object UserEvent {
+  case class Banned() extends domain.Event("Banned") with UserEvent
   object Banned {
-    def apply(_ts: LocalDateTime, _eventId: UUID): Banned = new Banned() {
-      override val ts: LocalDateTime = _ts
+    def apply(_ts: Instant, _eventId: UUID): Banned = new Banned() {
+      override val ts: Instant = _ts
       override val eventId: UUID = _eventId
     }
   }
-  case class MatchedWithPartner(partnerId: UserId) extends Event("MatchedWithPartner")
+  case class MatchedWithPartner(partnerId: UserId) extends domain.Event("MatchedWithPartner") with UserEvent
 }
 
 object User {
@@ -109,7 +107,7 @@ object User {
   case class Chatting(partnerId: UserId) extends UserState
 
   import Command._
-  import Event._
+  import UserEvent._
 
   def behavior(userId: UserId, readStream: EventStore): Behavior[User.Command] = Behaviors.setup { ctx =>
     import akka.actor.typed.scaladsl.adapter._
@@ -124,7 +122,7 @@ object User {
   }
 
   def persistentBehavior(userId: UserId): Behavior[Command] =
-    PersistentBehaviors.receive[Command, Event, UserState](
+    PersistentBehaviors.receive[Command, UserEvent, UserState](
       persistenceId = userId.persistenceId,
       emptyState = Idle,
       commandHandler = commandHandler(userId),
@@ -134,7 +132,7 @@ object User {
       ctx.log.info(s"Recovered: ${state.toString}")
     }
 
-  def commandHandler(userId: UserId): CommandHandler[Command, Event, UserState] = (ctx,state,command) =>
+  def commandHandler(userId: UserId): CommandHandler[Command, UserEvent, UserState] = (ctx,state,command) =>
     state match {
       case Idle =>
         command match {
@@ -156,7 +154,7 @@ object User {
         Effect.unhandled
     }
 
-  val eventHandler: (UserState, Event) => UserState = {
+  val eventHandler: (UserState, UserEvent) => UserState = {
     case (state, Banned()) =>
       BannedState
     case (Idle, MatchedWithPartner(partnerId)) =>

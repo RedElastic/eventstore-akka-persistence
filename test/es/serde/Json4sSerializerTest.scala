@@ -1,8 +1,8 @@
 package es.serde
 
 import domain.chat.ChatMatch
-import domain.user.Event
-import domain.user.Event.Banned
+import domain.user.UserEvent
+import domain.user.UserEvent.Banned
 import domain.user.User.UserId
 import es.serde.Json4sSerializer._
 import org.json4s._

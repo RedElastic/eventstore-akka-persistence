@@ -1,10 +1,10 @@
 package domain
 
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.UUID
 
-trait Event {
-  val ts: LocalDateTime = LocalDateTime.now()
+abstract class Event(val eventName: String) {
+  val ts: Instant = Instant.now()
   val eventId: UUID = UUID.randomUUID()
 }
 
