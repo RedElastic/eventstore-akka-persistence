@@ -72,16 +72,16 @@ class UserRepositoryImpl(readStream: EventStore)(implicit actorSystem: ActorSyst
 
 
 // It be nice to put this in User but there are serialization issues that I don't care to work out at the moment.
-sealed trait Event extends domain.Event
+abstract class Event(val eventType: String) extends domain.Event
 object Event {
-  case class Banned() extends Event
+  case class Banned() extends Event("Banned")
   object Banned {
     def apply(_ts: LocalDateTime, _eventId: UUID): Banned = new Banned() {
       override val ts: LocalDateTime = _ts
       override val eventId: UUID = _eventId
     }
   }
-  case class MatchedWithPartner(partnerId: UserId) extends Event
+  case class MatchedWithPartner(partnerId: UserId) extends Event("MatchedWithPartner")
 }
 
 object User {

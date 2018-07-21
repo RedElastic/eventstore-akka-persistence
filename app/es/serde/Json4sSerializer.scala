@@ -40,11 +40,17 @@ class Json4sSerializer(val system: ExtendedActorSystem) extends EventStoreSerial
 
   def toEvent(x: AnyRef) = x match {
     case x: PersistentRepr =>
+      val eventType = x.payload match {
+        case e: domain.user.Event =>
+          e.eventType
+        case e =>
+          e.getClass.getName
+      }
       val data = x.payload.asInstanceOf[AnyRef]
       val dataClass = classFor(x.payload.asInstanceOf[AnyRef]).getName
       val metadata = x.withPayload("").withManifest(dataClass)
       EventData(
-        eventType = dataClass,
+        eventType = eventType,
         data = Content(ByteString(toBinary(data)), ContentType.Json),
         metadata = Content(ByteString(toBinary(metadata)), ContentType.Json)
       )
