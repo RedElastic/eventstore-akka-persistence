@@ -121,46 +121,49 @@ object User {
     persistentBehavior(userId)
   }
 
-  def persistentBehavior(userId: UserId): Behavior[Command] =
+  def persistentBehavior(userId: UserId): Behavior[Command] = Behaviors.setup { ctx =>
+    implicit val log = ctx.log
     PersistentBehaviors.receive[Command, UserEvent, UserState](
       persistenceId = userId.persistenceId,
       emptyState = Idle,
       commandHandler = commandHandler(userId),
       eventHandler = eventHandler)
-    .snapshotEvery(numberOfEvents = 20)
-    .onRecoveryCompleted{ (ctx, state) =>
-      ctx.log.info(s"Recovered: ${state.toString}")
-    }
-
-  def commandHandler(userId: UserId): CommandHandler[Command, UserEvent, UserState] = (ctx,state,command) =>
-    state match {
-      case Idle =>
-        command match {
-          case Ban =>
-            ctx.log.info(s"User ${userId.asString} banned.")
-            Effect.persist(Banned())
-          case ChatConnect(partnerId) =>
-            ctx.log.info(s"User ${userId.asString} matched with ${partnerId.asString}")
-            Effect.persist(MatchedWithPartner(partnerId))
-        }
-      case Chatting(partnerId) =>
-        command match {
-          case Ban =>
-            Effect.persist(Banned())
-          case ChatConnect(_) =>
-            Effect.unhandled
-        }
-      case BannedState =>
-        Effect.unhandled
-    }
-
-  val eventHandler: (UserState, UserEvent) => UserState = {
-    case (_, Banned()) =>
-      BannedState
-    case (Idle, MatchedWithPartner(partnerId)) =>
-      Chatting(partnerId)
-    case (state, _) =>
-      state
+      .snapshotEvery(numberOfEvents = 20)
+      .onRecoveryCompleted { state =>
+        log.info(s"Recovered: ${state.toString}")
+      }
   }
+
+  def commandHandler(userId: UserId)(implicit log: Logger): CommandHandler[Command, UserEvent, UserState] =
+    (state, command) =>
+      state match {
+        case Idle =>
+          command match {
+            case Ban =>
+              log.info(s"User ${userId.asString} banned.")
+              Effect.persist(Banned())
+            case ChatConnect(partnerId) =>
+              log.info(s"User ${userId.asString} matched with ${partnerId.asString}")
+              Effect.persist(MatchedWithPartner(partnerId))
+          }
+        case Chatting(partnerId) =>
+          command match {
+            case Ban =>
+              Effect.persist(Banned())
+            case ChatConnect(_) =>
+              Effect.unhandled
+          }
+        case BannedState =>
+          Effect.unhandled
+      }
+
+      val eventHandler: (UserState, UserEvent) => UserState = {
+        case (_, Banned()) =>
+          BannedState
+        case (Idle, MatchedWithPartner(partnerId)) =>
+          Chatting(partnerId)
+        case (state, _) =>
+          state
+      }
 
 }
